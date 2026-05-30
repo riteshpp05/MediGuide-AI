@@ -1,0 +1,41 @@
+# ── Environment ──
+.env
+.env.*
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# ── Virtual Environment ──
+venv/
+.venv/
+env/
+
+# ── Data & Indexes ──
+faiss_index/
+data/
+
+# ── SQLite Databases ──
+chatbot.db
+answer_cache.db
+
+# ── Streamlit ──
+.streamlit/secrets.toml
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Logs ──
+*.log

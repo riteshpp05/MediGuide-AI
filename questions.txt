@@ -1,0 +1,21 @@
+# Medical Chatbot Questions
+
+1. What is an abdominal ultrasound?
+
+2. Why is abdominal ultrasound used?
+
+3. How does ultrasound technology work?
+
+4. What are the advantages of ultrasound over x-rays?
+
+5. What diseases can be detected using abdominal ultrasound?
+
+6. What are the symptoms of liver disease?
+
+7. How are gallstones detected?
+
+8. What is cirrhosis of the liver?
+
+9. What precautions should be taken before an ultrasound?
+
+10. What are the risks of abdominal ultrasound?
