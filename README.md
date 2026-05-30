@@ -34,6 +34,33 @@ MediGuide AI is an advanced, locally-hosted medical RAG (Retrieval-Augmented Gen
 - **Web Search**: Tavily API
 - **State & Caching**: SQLite (`chatbot.db` and `answer_cache.db`)
 
+## 🧠 How It Works (The RAG Pipeline)
+
+```mermaid
+flowchart TD
+    A[User Asks Medical Question] --> B{Check SQLite Cache}
+    B -- Hit --> C[Return Cached Answer Instantly]
+    B -- Miss --> D[Retrieve Chat History via LangGraph]
+    D --> E[Search FAISS Vector Index using PDFs]
+    E --> F{Context Found?}
+    F -- Yes --> G[Format Strict Medical Prompt]
+    F -- No / Time-Sensitive --> H[Search Web via Tavily API]
+    H --> G
+    G --> I[Ollama LLM Generates Answer]
+    I --> J[Save to SQLite Cache]
+    J --> K[Stream Answer to Streamlit UI]
+```
+
+When a user asks a medical question, the system follows a strict, multi-step pipeline to ensure accuracy and reduce hallucinations:
+
+1. **Answer Cache Check**: The system hashes the user's question and checks the local `answer_cache.db`. If a valid, non-expired answer exists, it is returned instantly, saving API tokens and time.
+2. **Conversation Memory**: LangGraph retrieves the current thread's chat history from `chatbot.db` to resolve follow-up questions and context (e.g., "What are the symptoms of *it*?").
+3. **Primary Retrieval (Local RAG)**: The question is converted into embeddings and searched against the local FAISS index containing your uploaded medical PDFs.
+4. **Fallback Retrieval (Web Search)**: If the local documents yield no relevant results, or if the question is time-sensitive (e.g., "latest treatments in 2024"), the Tavily API searches trusted medical domains (NIH, WHO, Mayo Clinic).
+5. **Prompt Formulation**: The retrieved context (PDF + Web) and chat history are injected into a strict system prompt that enforces safety rules (e.g., Emergency Detection) and exact citations.
+6. **LLM Generation**: The local Ollama model (`gemma4:31b-cloud`) generates the final response, which is streamed back to the Streamlit UI. Every factual claim is strictly cited.
+7. **Store in Cache**: The generated answer is saved back to `answer_cache.db` for future identical queries.
+
 ## 📋 Prerequisites
 
 Before running the project, ensure you have the following installed:
