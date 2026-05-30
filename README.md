@@ -157,7 +157,7 @@ mediguide-ai/
 **⚕️ Medical Disclaimer**: This project is for **educational and research purposes only**. The AI provides information based on uploaded references and web searches. It is **not** a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition.
 
 ## 🤝 Contributing
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/your-username/mediguide-ai/issues).
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/riteshpp05).
 
 ## 📄 License
 This project is licensed under the MIT License - see the LICENSE file for details.
