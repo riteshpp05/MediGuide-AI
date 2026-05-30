@@ -26,40 +26,59 @@ MediGuide AI is an advanced, locally-hosted medical RAG (Retrieval-Augmented Gen
 
 ## 🛠️ Architecture & Tech Stack
 
-- **Frontend**: Streamlit (with custom premium CSS styling)
-- **Orchestration**: LangChain & LangGraph
-- **LLM Engine**: Ollama (`gemma4:31b-cloud`)
-- **Vector Database**: FAISS (Facebook AI Similarity Search)
-- **Embeddings**: HuggingFace (`all-MiniLM-L6-v2`)
-- **Web Search**: Tavily API
-- **State & Caching**: SQLite (`chatbot.db` and `answer_cache.db`)
+| Component | Technology |
+|---|---|
+| Frontend | Streamlit (custom CSS) |
+| Orchestration | LangChain & LangGraph (4-node pipeline) |
+| LLM Engine | Ollama (`gemma4:31b-cloud`) |
+| Vector Database | FAISS (Facebook AI Similarity Search) |
+| Embeddings | HuggingFace (`all-MiniLM-L6-v2`) |
+| Reranker | CrossEncoder (`ms-marco-MiniLM-L-6-v2`) |
+| Web Search | Tavily API |
+| State & Caching | SQLite (`chatbot.db` + `answer_cache.db`) |
 
-## 🧠 How It Works (The RAG Pipeline)
+## 🧠 How It Works — Clinical Reasoning Pipeline
 
 ```mermaid
 flowchart TD
-    A[User Asks Medical Question] --> B{Check SQLite Cache}
-    B -- Hit --> C[Return Cached Answer Instantly]
-    B -- Miss --> D[Retrieve Chat History via LangGraph]
-    D --> E[Search FAISS Vector Index using PDFs]
-    E --> F{Context Found?}
-    F -- Yes --> G[Format Strict Medical Prompt]
-    F -- No / Time-Sensitive --> H[Search Web via Tavily API]
-    H --> G
-    G --> I[Ollama LLM Generates Answer]
-    I --> J[Save to SQLite Cache]
-    J --> K[Stream Answer to Streamlit UI]
+    A["User Asks Medical Question"] --> B["Node 1: Input Processing"]
+    B --> C{"Cache Hit?"}
+    C -- "Hit" --> D["Return Cached Answer Instantly"]
+    C -- "Miss" --> E["Extract Entities (age, gender, symptoms)"]
+    E --> F["Detect Emergency (deterministic)"]
+    F --> G["Node 2: Retrieval + Reranking"]
+    G --> H["FAISS MMR Search (entity-enriched query)"]
+    H --> I["Cross-Encoder Reranking (top 6 chunks)"]
+    I --> J{"Node 3: Web Search"}
+    J -- "Guideline / Empty Docs" --> K["Tavily API (WHO, NIH, ADA, KDIGO)"]
+    J -- "Docs Sufficient" --> L["Node 4: Clinical Reasoning"]
+    K --> L
+    L --> M["Differential Diagnosis + Severity Ranking"]
+    M --> N["Cache Answer + Stream to UI"]
 ```
 
-When a user asks a medical question, the system follows a strict, multi-step pipeline to ensure accuracy and reduce hallucinations:
+The system goes **beyond simple RAG summarization** — it performs **clinical reasoning** with differential diagnosis:
 
-1. **Answer Cache Check**: The system hashes the user's question and checks the local `answer_cache.db`. If a valid, non-expired answer exists, it is returned instantly, saving API tokens and time.
-2. **Conversation Memory**: LangGraph retrieves the current thread's chat history from `chatbot.db` to resolve follow-up questions and context (e.g., "What are the symptoms of *it*?").
-3. **Primary Retrieval (Local RAG)**: The question is converted into embeddings and searched against the local FAISS index containing your uploaded medical PDFs.
-4. **Fallback Retrieval (Web Search)**: If the local documents yield no relevant results, or if the question is time-sensitive (e.g., "latest treatments in 2024"), the Tavily API searches trusted medical domains (NIH, WHO, Mayo Clinic).
-5. **Prompt Formulation**: The retrieved context (PDF + Web) and chat history are injected into a strict system prompt that enforces safety rules (e.g., Emergency Detection) and exact citations.
-6. **LLM Generation**: The local Ollama model (`gemma4:31b-cloud`) generates the final response, which is streamed back to the Streamlit UI. Every factual claim is strictly cited.
-7. **Store in Cache**: The generated answer is saved back to `answer_cache.db` for future identical queries.
+### Node 1 — Input Processing (No LLM Call)
+- **Cache Check**: Version-aware hash (`question + prompt_version + model_version + KB_version`) ensures stale answers are never served.
+- **Entity Extraction**: Regex-based extraction of age, gender, symptoms, severity, and duration from the query.
+- **Emergency Detection**: Deterministic pattern matching across 8 categories (cardiac, stroke, respiratory, neurological, toxicological, psychiatric, hemorrhagic, allergic). Fires *before* any retrieval for minimal latency.
+- **Chat History**: Formats the last 6 messages for follow-up pronoun resolution.
+
+### Node 2 — Retrieval + Reranking
+- **Enriched Query**: Extracted entities are appended to the original question for better FAISS recall.
+- **MMR Retrieval**: Fetches 12 diverse candidate chunks from the FAISS index.
+- **Cross-Encoder Reranking**: `ms-marco-MiniLM-L-6-v2` scores each chunk against the query and keeps the top 6 most relevant.
+
+### Node 3 — Web Search (Conditional)
+- Triggers automatically for **guideline queries** (keywords: `latest`, `guideline`, `recommendation`, `2025`, `protocol`, `standard of care`) or when local documents have no results.
+- Searches trusted medical domains: WHO, NIH, Mayo Clinic, WebMD, ADA, KDIGO, Cochrane, PubMed.
+
+### Node 4 — Clinical Reasoning (Single LLM Call)
+- Receives: patient summary, reranked evidence, web results, emergency status, chat history.
+- **Clinical scenarios** (patient info detected) → Produces: Patient Summary → Clinical Interpretation → Ranked Differential Diagnoses → Recommended Actions → Emergency Warning Signs → Missing Information → Sources.
+- **Simple questions** (no patient info) → Produces: Direct Answer → Details → Sources.
+- Caches the answer (skips emergencies, fallbacks, off-topic responses).
 
 ## 📋 Prerequisites
 

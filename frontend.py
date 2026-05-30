@@ -133,16 +133,23 @@ if "threads" not in st.session_state:
 with st.sidebar:
     # Header
     st.markdown("<h1 style='text-align: center; font-size: 2.2rem; margin-bottom: 0;'>🩺 MediGuide AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #a1a1aa; font-size: 0.9rem;'>Medical Intelligence</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a1a1aa; font-size: 0.9rem;'>Clinical Reasoning Engine</p>", unsafe_allow_html=True)
     
     st.divider()
     
     # Status
     ollama_status = "🟢" if health["ollama"] else "🔴"
     faiss_status = "🟢" if health["faiss_index"] else "🔴"
+    reranker_status = "🟢" if health.get("reranker") else "🟡"
     
     st.markdown(f"**System Status**")
-    st.markdown(f"{ollama_status} LLM (`{health['model']}`)<br>{faiss_status} Knowledge Base", unsafe_allow_html=True)
+    st.markdown(
+        f"{ollama_status} LLM (`{health['model']}`)<br>"
+        f"{faiss_status} Knowledge Base<br>"
+        f"{reranker_status} Reranker<br>"
+        f"🔖 Pipeline `{health.get('pipeline_version', 'v1')}`",
+        unsafe_allow_html=True,
+    )
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -212,14 +219,14 @@ if not health["ollama"]:
 if not st.session_state.messages:
     # Beautiful welcome header
     st.markdown("<h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0; color: #f8fafc;'>How can I help you today?</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.1rem; margin-bottom: 3rem;'>Ask me anything about medical conditions, treatments, and diagnostics from the uploaded reference materials.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.1rem; margin-bottom: 3rem;'>Ask me anything about medical conditions, treatments, and clinical scenarios from the uploaded reference materials.</p>", unsafe_allow_html=True)
 
-    # Suggestion Chips
+    # Suggestion Chips — includes clinical scenarios
     suggestions = [
-        "What is abdominal ultrasound?",
-        "What are the symptoms of liver disease?",
-        "How are gallstones detected?",
-        "What is cirrhosis of the liver?",
+        "A 45-year-old male has chest pain radiating to the left arm, sweating, and nausea. What could this be?",
+        "What are the symptoms of liver cirrhosis?",
+        "What are the latest diabetes treatment guidelines?",
+        "How are gallstones detected on ultrasound?",
     ]
 
     cols = st.columns(2)
@@ -282,8 +289,12 @@ if user_input:
                 stream_mode="messages",
             ):
                 if hasattr(chunk, "content") and chunk.content:
-                    full_response += chunk.content
-                    message_placeholder.markdown(full_response + " ▌")
+                    # Only stream tokens from clinical reasoning & input (cache hits)
+                    # Skip internal nodes (entity extraction, retrieval, etc.)
+                    node = metadata.get("langgraph_node", "")
+                    if node in ("clinical_reasoning", "input_processing", ""):
+                        full_response += chunk.content
+                        message_placeholder.markdown(full_response + " ▌")
             message_placeholder.markdown(full_response)
         except Exception as e:
             full_response = (
