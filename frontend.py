@@ -221,21 +221,6 @@ if not st.session_state.messages:
     st.markdown("<h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0; color: #f8fafc;'>How can I help you today?</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.1rem; margin-bottom: 3rem;'>Ask me anything about medical conditions, treatments, and clinical scenarios from the uploaded reference materials.</p>", unsafe_allow_html=True)
 
-    # Suggestion Chips — includes clinical scenarios
-    suggestions = [
-        "A 45-year-old male has chest pain radiating to the left arm, sweating, and nausea. What could this be?",
-        "What are the symptoms of liver cirrhosis?",
-        "What are the latest diabetes treatment guidelines?",
-        "How are gallstones detected on ultrasound?",
-    ]
-
-    cols = st.columns(2)
-    for i, text in enumerate(suggestions):
-        with cols[i % 2]:
-            if st.button(f"💬 {text}", key=f"suggestion_{i}", use_container_width=True):
-                st.session_state.trigger_input = text
-                st.rerun()
-
     st.markdown("<br><br>", unsafe_allow_html=True)
     
     # Disclaimer
