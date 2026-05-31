@@ -6,6 +6,7 @@
   [![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-red.svg)](https://streamlit.io/)
   [![LangChain](https://img.shields.io/badge/LangChain-0.2+-green.svg)](https://python.langchain.com/)
   [![Groq](https://img.shields.io/badge/Groq-Cloud_LLM-orange.svg)](https://groq.com/)
+  [![Live Demo](https://img.shields.io/badge/Live_Demo-Play_Now-success?style=flat-square)](https://mediguide-ai-5aog8mjxpxfyyjcjk2iknb.streamlit.app/)
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 </div>
 
