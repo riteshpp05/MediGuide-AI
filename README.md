@@ -5,19 +5,19 @@
   [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/)
   [![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-red.svg)](https://streamlit.io/)
   [![LangChain](https://img.shields.io/badge/LangChain-0.2+-green.svg)](https://python.langchain.com/)
-  [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai/)
+  [![Groq](https://img.shields.io/badge/Groq-Cloud_LLM-orange.svg)](https://groq.com/)
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 </div>
 
 ---
 
-MediGuide AI is an advanced, locally-hosted medical RAG (Retrieval-Augmented Generation) chatbot. It combines the power of local LLMs via Ollama, LangChain for orchestration, LangGraph for conversation state, and Streamlit for a sleek, responsive frontend. It intelligently grounds its answers in uploaded medical documents (PDFs) and trusted medical web sources to provide accurate, reliable, and well-cited information.
+MediGuide AI is an advanced medical RAG (Retrieval-Augmented Generation) chatbot. It combines the power of cloud LLMs via Groq, LangChain for orchestration, LangGraph for conversation state, and Streamlit for a sleek, responsive frontend. It intelligently grounds its answers in uploaded medical documents (PDFs) and trusted medical web sources to provide accurate, reliable, and well-cited information.
 
 ## 🚀 Key Features
 
 - **📄 Document Knowledge Base**: Ingests medical PDFs using a FAISS vector store for fast, accurate retrieval.
 - **🌐 Trusted Web Search**: Integrates Tavily API to fetch real-time medical data from authoritative sources (WHO, NIH, Mayo Clinic, WebMD).
-- **🧠 Local LLM Integration**: Powered by `gemma4:31b-cloud` (via Ollama) for completely private and offline inference.
+- **🧠 Cloud LLM Integration**: Powered by `llama-3.3-70b-versatile` (via Groq) for lightning-fast inference.
 - **💾 Conversation Memory**: Persistent chat threads powered by LangGraph and SQLite checkpointing.
 - **⚡ Smart Caching System**: SQLite-based answer cache to save tokens, reduce latency, and track usage statistics.
 - **🚨 Emergency Detection**: Instantly identifies critical medical situations and alerts the user to contact emergency services.
@@ -30,7 +30,7 @@ MediGuide AI is an advanced, locally-hosted medical RAG (Retrieval-Augmented Gen
 |---|---|
 | Frontend | Streamlit (custom CSS) |
 | Orchestration | LangChain & LangGraph (4-node pipeline) |
-| LLM Engine | Ollama (`gemma4:31b-cloud`) |
+| LLM Engine | Groq (`llama-3.3-70b-versatile`) |
 | Vector Database | FAISS (Facebook AI Similarity Search) |
 | Embeddings | HuggingFace (`all-MiniLM-L6-v2`) |
 | Reranker | CrossEncoder (`ms-marco-MiniLM-L-6-v2`) |
@@ -85,13 +85,7 @@ The system goes **beyond simple RAG summarization** — it performs **clinical r
 Before running the project, ensure you have the following installed:
 - **Python** 3.9 or higher
 - **Git**
-- **Ollama**: Download and install from [ollama.com](https://ollama.com/)
-
-Once Ollama is installed, pull the required model:
-```bash
-ollama run gemma4:31b-cloud
-```
-*(Note: If you are using a different model, update the `.env` file accordingly).*
+- **Groq API Key**: Get it from [console.groq.com](https://console.groq.com/)
 
 ## ⚙️ Setup & Installation
 
@@ -119,8 +113,9 @@ pip install -r requirements.txt
 Create a `.env` file in the root directory and add your Tavily API Key for web search fallback:
 ```env
 TAVILY_API_KEY=your-tavily-api-key-here
+GROQ_API_KEY=your-groq-api-key-here
 # Optional configurations:
-# OLLAMA_MODEL=gemma4:31b-cloud
+# GROQ_MODEL=llama-3.3-70b-versatile
 # CHUNK_SIZE=1000
 # CHUNK_OVERLAP=200
 ```

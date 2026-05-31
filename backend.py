@@ -18,7 +18,7 @@ from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -39,7 +39,7 @@ load_dotenv()
 # ══════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════
-OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "gemma4:31b-cloud")
+GROQ_MODEL      = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 FAISS_INDEX_DIR = os.getenv("FAISS_INDEX_DIR", "faiss_index")
 CHUNK_SIZE      = int(os.getenv("CHUNK_SIZE", "1000"))
@@ -51,7 +51,7 @@ CACHE_TTL       = int(os.getenv("CACHE_TTL", "86400"))   # 24 hours
 
 # ── Versioning (for composite cache keys) ─────────────────────
 PROMPT_VERSION = "v2.0-clinical"
-MODEL_VERSION  = OLLAMA_MODEL
+MODEL_VERSION  = GROQ_MODEL
 KB_VERSION     = (
     str(int(os.path.getmtime(FAISS_INDEX_DIR)))
     if os.path.exists(FAISS_INDEX_DIR)
@@ -281,13 +281,11 @@ _llm_instance = None
 def get_llm():
     global _llm_instance
     if _llm_instance is None:
-        _llm_instance = ChatOllama(
-            model=OLLAMA_MODEL,
+        _llm_instance = ChatGroq(
+            model=GROQ_MODEL,
             temperature=0.0,
-            num_ctx=8192,
-            num_predict=1024,
         )
-        logger.info("LLM initialised — %s", OLLAMA_MODEL)
+        logger.info("LLM initialised — %s", GROQ_MODEL)
     return _llm_instance
 
 
@@ -907,18 +905,18 @@ def delete_thread(thread_id):
 # ══════════════════════════════════════════════════════════════
 def check_system_health():
     health = {
-        "ollama": False,
+        "groq": False,
         "faiss_index": False,
-        "model": OLLAMA_MODEL,
+        "model": GROQ_MODEL,
         "pipeline_version": PROMPT_VERSION,
         "reranker": RERANKER_AVAILABLE,
     }
     health["faiss_index"] = os.path.exists(FAISS_INDEX_DIR)
     try:
         get_llm().invoke("test")
-        health["ollama"] = True
+        health["groq"] = True
     except Exception:
-        health["ollama"] = False
+        health["groq"] = False
     return health
 
 

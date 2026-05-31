@@ -138,13 +138,13 @@ with st.sidebar:
     st.divider()
     
     # Status
-    ollama_status = "🟢" if health["ollama"] else "🔴"
+    groq_status = "🟢" if health["groq"] else "🔴"
     faiss_status = "🟢" if health["faiss_index"] else "🔴"
     reranker_status = "🟢" if health.get("reranker") else "🟡"
     
     st.markdown(f"**System Status**")
     st.markdown(
-        f"{ollama_status} LLM (`{health['model']}`)<br>"
+        f"{groq_status} LLM (`{health['model']}`)<br>"
         f"{faiss_status} Knowledge Base<br>"
         f"{reranker_status} Reranker<br>"
         f"🔖 Pipeline `{health.get('pipeline_version', 'v1')}`",
@@ -209,8 +209,8 @@ with st.sidebar:
 if not health["faiss_index"]:
     st.error("⚠️ **Knowledge base not found.** Run: `python backend.py --ingest`")
 
-if not health["ollama"]:
-    st.warning(f"⚠️ **Cannot reach Ollama model** `{health['model']}`. Make sure Ollama is running.")
+if not health["groq"]:
+    st.warning(f"⚠️ **Cannot reach Groq model** `{health['model']}`. Make sure GROQ_API_KEY is set in .env.")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -285,7 +285,7 @@ if user_input:
             full_response = (
                 f"⚠️ **Connection Error**\n\n"
                 f"Could not get a response from the AI model. "
-                f"Please ensure Ollama is running.\n\n"
+                f"Please ensure Groq API key is valid.\n\n"
                 f"`{str(e)}`"
             )
             message_placeholder.error(full_response)
