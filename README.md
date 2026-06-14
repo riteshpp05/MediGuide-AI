@@ -145,6 +145,23 @@ docker compose up -d --build
 ```
 This will automatically map port `8501` and create persistent volumes for your chat history and cache databases.
 
+**Architecture Inside Docker:**
+```mermaid
+flowchart LR
+    subgraph Docker Container
+        A["Streamlit UI\n:8501"] --> B["backend.py\nLangGraph Pipeline"]
+        B --> C["FAISS Index\n(volume)"]
+        B --> D["chatbot.db\n(volume)"]
+        B --> E["answer_cache.db\n(volume)"]
+    end
+
+    B -->|HTTPS| F["Groq API\nllama-3.3-70b"]
+    B -->|HTTPS| G["Tavily API\nWeb Search"]
+    B -->|HTTPS| H["HuggingFace\nEmbeddings"]
+
+    User -->|":8501"| A
+```
+
 ## 📁 Project Structure
 
 ```text
