@@ -1,0 +1,67 @@
+# ══════════════════════════════════════════════════════════════
+# MediGuide AI — Docker Ignore
+# ══════════════════════════════════════════════════════════════
+# Prevents unnecessary files from being sent to the Docker
+# build context, which speeds up builds and reduces image size.
+
+# ── Git ──
+.git
+.gitignore
+
+# ── Environment (NEVER bake secrets into images) ──
+.env
+
+# ── Python artifacts ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+build/
+dist/
+
+# ── Virtual environment (we install fresh in the Dockerfile) ──
+venv/
+.venv/
+env/
+
+# ── SQLite databases (mounted as volumes at runtime) ──
+chatbot.db
+answer_cache.db
+
+# ── IDE / Editor ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS files ──
+.DS_Store
+Thumbs.db
+
+# ── Logs ──
+*.log
+logs/
+
+# ── Notebooks (may contain secrets) ──
+*.ipynb
+Test.ipynb
+
+# ── Docker files (no need to copy themselves) ──
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# ── Documentation (not needed in the image) ──
+README.md
+LICENSE
+questions.txt
+
+# ── Gemini AI config ──
+.gemini/
+
+# ── Optimization: Explicitly exclude massive folders ──
+data/
+evaluation/
+.cache/
+.huggingface/

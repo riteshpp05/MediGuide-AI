@@ -135,6 +135,16 @@ streamlit run frontend.py
 ```
 Open your browser and navigate to `http://localhost:8501`.
 
+### 7. 🐳 Docker Deployment (Production)
+
+We provide a fully optimized, multi-stage Docker setup. The image is aggressively optimized (CPU-only PyTorch) to keep the footprint under 1 GB.
+
+**Using Docker Compose (Recommended):**
+```bash
+docker compose up -d --build
+```
+This will automatically map port `8501` and create persistent volumes for your chat history and cache databases.
+
 ## 📁 Project Structure
 
 ```text
@@ -142,8 +152,12 @@ mediguide-ai/
 ├── backend.py            # Core RAG logic, LangGraph setup, DB operations
 ├── frontend.py           # Streamlit UI, chat interface, state management
 ├── requirements.txt      # Python dependencies
-├── .env                  # Environment variables (Tavily API, Config)
+├── Dockerfile            # Optimized multi-stage Docker build
+├── docker-compose.yml    # Production deployment configuration
+├── .dockerignore         # Docker context exclusions
+├── .env                  # Environment variables (Groq/Tavily API)
 ├── data/                 # Directory for your raw medical PDFs
+├── evaluation/           # Medical test cases
 ├── faiss_index/          # Generated vector embeddings directory
 ├── answer_cache.db       # SQLite DB for caching AI responses
 └── chatbot.db            # SQLite DB for LangGraph thread persistence
