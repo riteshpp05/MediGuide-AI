@@ -19,6 +19,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -27,12 +28,7 @@ from langgraph.graph.message import add_messages
 from langgraph.checkpoint.sqlite import SqliteSaver
 from typing import TypedDict, Annotated
 
-try:
-    from sentence_transformers import CrossEncoder
-    RERANKER_AVAILABLE = True
-except ImportError:
-    RERANKER_AVAILABLE = False
-    logger.warning("CrossEncoder not available — reranking disabled. Install sentence-transformers.")
+RERANKER_AVAILABLE = True
 
 load_dotenv()
 
@@ -58,7 +54,15 @@ KB_VERSION     = (
     else "none"
 )
 
-embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+_embeddings_instance = None
+
+def get_embeddings():
+    global _embeddings_instance
+    if _embeddings_instance is None:
+        logger.info("Loading HuggingFace embeddings (%s)...", EMBEDDING_MODEL)
+        _embeddings_instance = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+        logger.info("HuggingFace embeddings loaded successfully.")
+    return _embeddings_instance
 
 
 # ══════════════════════════════════════════════════════════════
@@ -210,7 +214,7 @@ def build_faiss_index(data_dir="data"):
         "Deduplication: %d unique chunks kept, %d duplicates removed",
         len(unique_chunks), original_count - len(unique_chunks),
     )
-    vectorstore = FAISS.from_documents(chunks, embeddings)
+    vectorstore = FAISS.from_documents(chunks, get_embeddings())
     vectorstore.save_local(FAISS_INDEX_DIR)
     logger.info("FAISS index saved")
 
@@ -227,7 +231,7 @@ def get_retriever(k=None):
         if not os.path.exists(FAISS_INDEX_DIR):
             return None
         db = FAISS.load_local(
-            FAISS_INDEX_DIR, embeddings,
+            FAISS_INDEX_DIR, get_embeddings(),
             allow_dangerous_deserialization=True
         )
         _retriever_cache = db.as_retriever(
@@ -245,10 +249,16 @@ _reranker_cache = None
 
 def get_reranker():
     """Lazy-load the cross-encoder reranker (~22 MB model, downloaded once)."""
-    global _reranker_cache
+    global _reranker_cache, RERANKER_AVAILABLE
     if _reranker_cache is None and RERANKER_AVAILABLE:
-        _reranker_cache = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-        logger.info("Cross-encoder reranker loaded")
+        try:
+            from sentence_transformers import CrossEncoder
+            _reranker_cache = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+            logger.info("Cross-encoder reranker loaded")
+        except Exception as e:
+            RERANKER_AVAILABLE = False
+            logger.warning("CrossEncoder could not be loaded (%s) — using standard retrieval", e)
+            return None
     return _reranker_cache
 
 
@@ -273,19 +283,21 @@ def rerank_documents(query, docs, top_k=None):
     return [doc for _, doc in scored_docs[:top_k]]
 
 
-# ══════════════════════════════════════════════════════════════
-# LLM (lazy-loaded)
-# ══════════════════════════════════════════════════════════════
 _llm_instance = None
 
-def get_llm():
+def get_llm(api_key=None, model=None, force_reload=False):
     global _llm_instance
-    if _llm_instance is None:
+    key = api_key or os.getenv("GROQ_API_KEY", "")
+    mdl = model or os.getenv("GROQ_MODEL", GROQ_MODEL)
+    if _llm_instance is None or force_reload or api_key:
         _llm_instance = ChatGroq(
-            model=GROQ_MODEL,
+            groq_api_key=key if key else "missing-key",
+            model=mdl,
             temperature=0.0,
+            max_retries=1,
+            timeout=10,
         )
-        logger.info("LLM initialised — %s", GROQ_MODEL)
+        logger.info("LLM initialised — %s", mdl)
     return _llm_instance
 
 
@@ -591,6 +603,9 @@ class ChatState(TypedDict):
     web_results_text: str
     sources_list: list
     chat_history: str
+    is_verified: bool
+    verification_attempts: int
+    draft_response: str
     is_guideline_query: bool
     is_cache_hit: bool
 
@@ -824,17 +839,11 @@ def clinical_reasoning_node(state: ChatState):
         if sources_list:
             answer = f"{answer}\n\n---\n📚 **References:**\n{sources_text}"
 
-        return {"messages": [AIMessage(content=answer)]}
+        return {"draft_response": answer}
 
     except Exception as e:
         logger.error("LLM error: %s", e)
-        return {
-            "messages": [
-                AIMessage(
-                    content=f"⚠️ Error communicating with the AI model.\n\n`{str(e)}`"
-                )
-            ]
-        }
+        return {"draft_response": f"⚠️ Error communicating with the AI model.\n\n`{str(e)}`"}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -855,6 +864,29 @@ checkpointer = SqliteSaver(conn=_conn)
 
 
 # ══════════════════════════════════════════════════════════════
+
+def verifier_node(state: ChatState):
+    """Goal B: The Verifier Agent checks the drafted answer against retrieved evidence."""
+    last_message = state.get("draft_response", "")
+    if "Error communicating" in last_message or "I'm sorry, I don't have information" in last_message:
+        return {"messages": [AIMessage(content=last_message)], "is_verified": False}
+        
+    context = state.get("reranked_context", "") + "\n" + state.get("web_results_text", "")
+    question = state.get("sanitized_question", "")
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are the MediGuide Verification Agent. Your only job is to ensure the Assistant's Draft Response is medically FAITHFUL to the provided Context.\nIf the draft contains specific clinical claims, dosages, or facts NOT present in the context, you MUST rewrite the response to remove or correct them.\nIf it is already faithful, output the draft exactly as is.\n\nCRITICAL INSTRUCTION: You MUST append the exact string '\n\n*[🛡️ Verified by Clinical Faithfulness Agent]*' to the very end of your output."),
+        ("human", "USER QUERY:\n{question}\n\nEVIDENCE CONTEXT:\n{context}\n\nDRAFT RESPONSE:\n{draft}\n\nPlease output the verified, finalized response (and nothing else).")
+    ])
+    
+    chain = prompt | get_llm()
+    try:
+        response = chain.invoke({"question": question, "context": context, "draft": last_message})
+        return {"messages": [AIMessage(content=response.content)], "is_verified": True}
+    except Exception as e:
+        logger.error("Verifier error: %s", e)
+        return {"messages": [AIMessage(content=last_message)], "is_verified": False}
+
 # GRAPH WIRING — 4-node clinical reasoning pipeline
 # ══════════════════════════════════════════════════════════════
 graph = StateGraph(ChatState)
@@ -863,12 +895,14 @@ graph.add_node("input_processing", input_node)
 graph.add_node("retrieval", retrieval_node)
 graph.add_node("web_search", web_search_node)
 graph.add_node("clinical_reasoning", clinical_reasoning_node)
+graph.add_node("verifier", verifier_node)
 
 graph.add_edge(START, "input_processing")
 graph.add_conditional_edges("input_processing", route_after_input)
 graph.add_edge("retrieval", "web_search")
 graph.add_edge("web_search", "clinical_reasoning")
-graph.add_edge("clinical_reasoning", END)
+graph.add_edge("clinical_reasoning", "verifier")
+graph.add_edge("verifier", END)
 
 chatbot = graph.compile(checkpointer=checkpointer)
 logger.info("Clinical reasoning pipeline compiled — 4 nodes, prompt %s", PROMPT_VERSION)
@@ -903,20 +937,36 @@ def delete_thread(thread_id):
 # ══════════════════════════════════════════════════════════════
 # HEALTH CHECK
 # ══════════════════════════════════════════════════════════════
-def check_system_health():
+def check_system_health(api_key=None):
+    current_key = api_key or os.getenv("GROQ_API_KEY", "")
+    current_model = os.getenv("GROQ_MODEL", GROQ_MODEL)
+    has_valid_key = bool(current_key and not current_key.startswith("your-") and len(current_key) > 10)
+    
     health = {
         "groq": False,
-        "faiss_index": False,
-        "model": GROQ_MODEL,
+        "faiss_index": os.path.exists(FAISS_INDEX_DIR),
+        "model": current_model,
         "pipeline_version": PROMPT_VERSION,
         "reranker": RERANKER_AVAILABLE,
+        "has_api_key": has_valid_key,
+        "tavily": bool(os.getenv("TAVILY_API_KEY", "") and not os.getenv("TAVILY_API_KEY", "").startswith("your-")),
+        "message": "Healthy"
     }
-    health["faiss_index"] = os.path.exists(FAISS_INDEX_DIR)
-    try:
-        get_llm().invoke("test")
-        health["groq"] = True
-    except Exception:
-        health["groq"] = False
+
+    if not health["faiss_index"]:
+        health["message"] = "Knowledge base index missing. Please run vector ingestion."
+    elif not has_valid_key:
+        health["message"] = "Groq API key not configured or empty."
+    else:
+        try:
+            test_llm = get_llm(api_key=current_key, model=current_model)
+            test_llm.invoke([HumanMessage(content="test")])
+            health["groq"] = True
+            health["message"] = "All systems operational"
+        except Exception as e:
+            health["groq"] = False
+            health["message"] = f"Groq LLM connection error: {str(e)}"
+            
     return health
 
 

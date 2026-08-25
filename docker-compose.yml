@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════
-# MediGuide AI — Docker Compose (Production)
+# MediGuide AI — Docker Compose (Production - React + FastAPI)
 # ══════════════════════════════════════════════════════════════
 # Usage:
 #   docker compose up -d          → Start in background
@@ -11,91 +11,58 @@
 services:
   # ── MediGuide AI Application ─────────────────────────────
   mediguide:
-    # Build from the Dockerfile in the current directory
     build:
       context: .
       dockerfile: Dockerfile
 
-    # Container name for easy reference
     container_name: mediguide-ai
-
-    # Restart policy: always restart unless manually stopped
-    # This ensures the app survives crashes and server reboots
     restart: unless-stopped
 
     # ── Port mapping ──
-    # Maps host port 8501 to container port 8501
-    # Access the app at http://localhost:8501
+    # Maps host port 8000 to container port 8000
+    # Access the app at http://localhost:8000
     ports:
-      - "8501:8501"
+      - "8000:8000"
 
-    # ── Environment variables ──
-    # Loaded from .env file in the same directory.
-    # NEVER hardcode API keys in this file.
     env_file:
       - .env
 
-    # ── Docker volumes for persistent data ──
-    # SQLite databases and FAISS index survive container restarts.
-    # Format: volume_name:/path/inside/container
+    # ── Persistent storage volumes ──
     volumes:
-      # Chat history database — persists conversation threads
       - mediguide_chatbot_db:/home/mediguide/app/chatbot.db
-
-      # Answer cache database — persists cached LLM responses
       - mediguide_cache_db:/home/mediguide/app/answer_cache.db
-
-      # FAISS vector index — persists the knowledge base
-      # Mount this if you want to update the index without rebuilding
+      - mediguide_meta_db:/home/mediguide/app/threads_meta.db
       - mediguide_faiss:/home/mediguide/app/faiss_index
-
-      # Application logs
       - mediguide_logs:/home/mediguide/app/logs
 
-      # ── Optional: Mount data for ingestion ──
-      # Since we removed raw data from the image to save space,
-      # uncomment this if you ever need to run `--ingest`
-      # - ./data:/home/mediguide/app/data
-
-    # ── Health check ──
-    # Docker Compose will monitor the app and restart if unhealthy
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
 
-    # ── Resource limits ──
-    # Prevents the container from consuming all host resources.
-    # Adjust based on your EC2 instance size.
     deploy:
       resources:
         limits:
-          memory: 4G      # Max 4 GB RAM (HuggingFace models need ~1-2 GB)
-          cpus: "2.0"     # Max 2 CPU cores
+          memory: 4G
+          cpus: "2.0"
         reservations:
-          memory: 2G      # Minimum guaranteed RAM
-          cpus: "1.0"     # Minimum guaranteed CPU
+          memory: 2G
+          cpus: "1.0"
 
-    # ── Logging ──
-    # Use json-file driver with rotation to prevent disk fill
     logging:
       driver: json-file
       options:
-        max-size: "10m"   # Max 10 MB per log file
-        max-file: "3"     # Keep 3 rotated log files
+        max-size: "10m"
+        max-file: "3"
 
-
-# ══════════════════════════════════════════════════════════════
-# NAMED VOLUMES
-# ══════════════════════════════════════════════════════════════
-# Docker manages these volumes. Data persists even if the
-# container is removed. Use `docker volume ls` to inspect.
 volumes:
   mediguide_chatbot_db:
     driver: local
   mediguide_cache_db:
+    driver: local
+  mediguide_meta_db:
     driver: local
   mediguide_faiss:
     driver: local
